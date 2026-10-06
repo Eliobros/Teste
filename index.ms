@@ -13,6 +13,8 @@ importar { rotaUsuarios } de "./rotas/usuarios"
 importar { rotaPayment } de "./rotas/payment"
 importar { rotaCadastro } de "./rotas/cadastro"  # <--- Mova para cá
 importar { rotaLogin } de "./rotas/login"        # <--- Mova para cá
+importar { apiClient } de "./lib/api"
+importar { rotaWebhook } de "./rotas/webhook"
 
 
 funcao inicializarBanco(conn):
@@ -78,15 +80,26 @@ variavel servidor = funcao(requisicao, resposta):
                        # importar { rotaLogin } de "./rotas/login"
                         rotaLogin(req, res, mysql, cripto)
                     senao:
-                        # Tratamento de erro 404 (Rota não encontrada)
-                        variavel erro404 = {
-                            "Status": "Erro",
-                            "Mensagem": "Rota nao encontrada",
-                            "Rota": rota,
-                            "Metodo": requisicao.metodo
-                        }
-                        res.json(404, erro404)
-                        escreva erro("[ROTA NÃO ENCONTRADA] " + requisicao.metodo + " " + rota)
+                        se rota == "/api/checkout":
+                            apiClient(req, res, config)
+                        senao:
+                            se rota == "/api/webhook":
+                                rotaWebhook(req, res, conn, config)
+                            senao:
+                            # Tratamento de erro 404 (Rota não encontrada)
+                                variavel erro404 = {
+                                    "Status": "Erro",
+                                    "Mensagem": "Rota nao encontrada",
+                                    "Rota": rota,
+                                    "Metodo": requisicao.metodo
+                                }
+
+
+                                res.json(404, erro404)
+                            escreva erro("[ROTA NÃO ENCONTRADA] " + requisicao.metodo + " " + rota)
+                            fim
+                                
+                        fim
                     fim
                 fim
             fim
