@@ -4,18 +4,17 @@ importar http de "http"
 importar caminho de "caminho"
 importar bcrypt de "bcrypt"
 importar sistema de "sistema"
+importar jwt de "mambas-jwt"
 
-variavel cripto = bcrypt    # Inicializa o bcrypt com um fator de custo de 10
+variavel cripto = bcrypt
 
-# Importando as funções criadas nos arquivos externos
 importar { rotaHome } de "./rotas/home"
 importar { rotaUsuarios } de "./rotas/usuarios"
 importar { rotaPayment } de "./rotas/payment"
-importar { rotaCadastro } de "./rotas/cadastro"  # <--- Mova para cá
-importar { rotaLogin } de "./rotas/login"        # <--- Mova para cá
+importar { rotaCadastro } de "./rotas/cadastro"
+importar { rotaLogin } de "./rotas/login"
 importar { apiClient } de "./lib/api"
 importar { rotaWebhook } de "./rotas/webhook"
-
 
 funcao inicializarBanco(conn):
     variavel sqls = [
@@ -28,11 +27,8 @@ funcao inicializarBanco(conn):
     fim
 
     variavel tabelas = conn.consultar("SHOW TABLES")
-    escreva sucesso("[DB] Tabelas criadas/verificadas no banco: " + tabelas)
+    escreva sucesso("[DB] Tabelas: " + tabelas.tamanho() + " encontradas")
     escreva sucesso("[DB] Banco inicializado e servidor pronto.")
-
-    variavel exec = sistema.executar("echo [DB] Banco inicializado e servidor pronto")
-    escreva exec
 fim
 
 variavel config = ambiente.carregar(caminho.arquivo(".env"))
@@ -52,7 +48,6 @@ se conn.ok == verdadeiro:
     inicializarBanco(mysql)
 senao:
     escreva erro(conn.mensagem)
-
 fim
 
 variavel app = http.criarServidor()
@@ -62,54 +57,57 @@ variavel servidor = funcao(requisicao, resposta):
     variavel req = requisicao
     variavel res = resposta
 
-    # Despacha as rotas sem chamar funções armazenadas em variáveis
-    se rota == "/":
-        rotaHome(req, res, mysql)
+    res.cabecalho("X-Powered-By", "MambaScript")
+    res.cabecalho("Access-Control-Allow-Origin", "*")
+    res.cabecalho("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    res.cabecalho("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+
+    se requisicao.metodo == "OPTIONS":
+        res.json(204, {})
+        escreva "[PREFLIGHT] " + rota
     senao:
-        se rota == "/users":
-            rotaUsuarios(req, res, mysql)
+        se rota == "/":
+            rotaHome(req, res, mysql)
         senao:
-            se rota == "/payment":
-                rotaPayment(req, res, config, mysql, data)
+            se rota == "/users":
+                rotaUsuarios(req, res, mysql)
             senao:
-                se rota == "/api/cadastro":
-                   # importar { rotaCadastro } de "./rotas/cadastro"
-                    rotaCadastro(req, res, mysql, cripto)
+                se rota == "/payment":
+                    rotaPayment(req, res, config, mysql, data)
                 senao:
-                    se rota == "/api/login":
-                       # importar { rotaLogin } de "./rotas/login"
-                        rotaLogin(req, res, mysql, cripto)
+                    se rota == "/api/cadastro":
+                        rotaCadastro(req, res, mysql, cripto, conn)
                     senao:
-                        se rota == "/api/checkout":
-                            apiClient(req, res, config)
+                        se rota == "/api/login":
+                            rotaLogin(req, res, conn, cripto, config, jwt, mysql)
                         senao:
-                            se rota == "/api/webhook":
-                                rotaWebhook(req, res, conn, config)
+                            se rota == "/api/checkout":
+                                apiClient(req, res, config)
                             senao:
-                            # Tratamento de erro 404 (Rota não encontrada)
-                                variavel erro404 = {
-                                    "Status": "Erro",
-                                    "Mensagem": "Rota nao encontrada",
-                                    "Rota": rota,
-                                    "Metodo": requisicao.metodo
-                                }
-
-
-                                res.json(404, erro404)
-                            escreva erro("[ROTA NÃO ENCONTRADA] " + requisicao.metodo + " " + rota)
+                                se rota == "/api/webhook":
+                                    rotaWebhook(req, res, conn, config)
+                                senao:
+                                    variavel erro404 = {
+                                        "Status": "Erro",
+                                        "Mensagem": "Rota nao encontrada",
+                                        "Rota": rota,
+                                        "Metodo": requisicao.metodo
+                                    }
+                                    res.json(404, erro404)
+                                    escreva erro("[ROTA NÃO ENCONTRADA] " + requisicao.metodo + " " + rota)
+                                fim
                             fim
-                                
                         fim
                     fim
                 fim
             fim
         fim
-    fim
 
-    escreva "[ROTA] " + requisicao.metodo + " " + rota
+        escreva "[ROTA] " + requisicao.metodo + " " + rota
+    fim
 fim
 
-# Código para iniciar o servidor
 app.aoReceber(servidor)
 app.escutar(porta)
 escreva sucesso("Servidor rodando na porta: " + porta + " acesse clicando aqui http://localhost:" + porta)
+exportar { mysql }
